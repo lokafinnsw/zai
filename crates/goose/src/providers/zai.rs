@@ -1,11 +1,20 @@
 use anyhow::Result;
+use async_stream::try_stream;
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use futures::TryStreamExt;
+use serde_json::Value;
+use std::io;
+use tokio::pin;
+use tokio_util::io::StreamReader;
 
 use super::api_client::{ApiClient, AuthMethod};
-use super::base::{ConfigKey, ModelInfo, Provider, ProviderMetadata, ProviderUsage, Usage};
+use super::base::{ConfigKey, MessageStream, ModelInfo, Provider, ProviderMetadata, ProviderUsage};
 use super::errors::ProviderError;
+use super::formats::anthropic::{
+    create_request, get_usage, response_to_message, response_to_streaming_message,
+};
 use super::retry::ProviderRetry;
+use super::utils::handle_status_openai_compat;
 use crate::conversation::message::Message;
 use crate::model::ModelConfig;
 use crate::providers::utils::RequestLog;
@@ -56,63 +65,6 @@ impl ZaiProvider {
             model,
             name: "zai".to_string(),
         })
-    }
-
-    fn create_request(
-        &self,
-        model_config: &ModelConfig,
-        system: &str,
-        messages: &[Message],
-    ) -> Result<Value, ProviderError> {
-        let mut anthropic_messages: Vec<Value> = Vec::new();
-
-        for msg in messages {
-            let role = match msg.role {
-                rmcp::model::Role::User => "user",
-                rmcp::model::Role::Assistant => "assistant",
-            };
-
-            let content = msg.as_concat_text();
-            anthropic_messages.push(json!({
-                "role": role,
-                "content": content
-            }));
-        }
-
-        let mut request = json!({
-            "model": model_config.model_name,
-            "max_tokens": 8192,
-            "messages": anthropic_messages
-        });
-
-        if !system.is_empty() {
-            request["system"] = json!(system);
-        }
-
-        Ok(request)
-    }
-
-    fn parse_response(&self, response: &Value) -> Result<(Message, Usage), ProviderError> {
-        let content = response
-            .get("content")
-            .and_then(|c| c.as_array())
-            .and_then(|arr| arr.first())
-            .and_then(|c| c.get("text"))
-            .and_then(|t| t.as_str())
-            .unwrap_or("");
-
-        let message = Message::assistant().with_text(content);
-
-        let usage = response
-            .get("usage")
-            .map(|u| Usage::new(
-                u.get("input_tokens").and_then(|v| v.as_i64()).map(|v| v as i32),
-                u.get("output_tokens").and_then(|v| v.as_i64()).map(|v| v as i32),
-                None,
-            ))
-            .unwrap_or_default();
-
-        Ok((message, usage))
     }
 
     async fn post(&self, payload: &Value) -> Result<Value, ProviderError> {
@@ -171,7 +123,7 @@ impl Provider for ZaiProvider {
     }
 
     #[tracing::instrument(
-        skip(self, model_config, system, messages, _tools),
+        skip(self, model_config, system, messages, tools),
         fields(model_config, input, output, input_tokens, output_tokens, total_tokens)
     )]
     async fn complete_with_model(
@@ -179,9 +131,9 @@ impl Provider for ZaiProvider {
         model_config: &ModelConfig,
         system: &str,
         messages: &[Message],
-        _tools: &[Tool],
+        tools: &[Tool],
     ) -> Result<(Message, ProviderUsage), ProviderError> {
-        let payload = self.create_request(model_config, system, messages)?;
+        let payload = create_request(model_config, system, messages, tools)?;
 
         let mut log = RequestLog::start(&self.model, &payload)?;
         let json_response = self
@@ -194,13 +146,64 @@ impl Provider for ZaiProvider {
                 let _ = log.error(e);
             })?;
 
-        let (message, usage) = self.parse_response(&json_response)?;
+        let message = response_to_message(&json_response)
+            .map_err(|e| ProviderError::RequestFailed(e.to_string()))?;
+        let usage = get_usage(&json_response)
+            .map_err(|e| ProviderError::RequestFailed(e.to_string()))?;
 
         log.write(&json_response, Some(&usage))?;
         Ok((message, ProviderUsage::new(model_config.model_name.clone(), usage)))
     }
 
+    async fn stream(
+        &self,
+        system: &str,
+        messages: &[Message],
+        tools: &[Tool],
+    ) -> Result<MessageStream, ProviderError> {
+        let mut payload = create_request(&self.model, system, messages, tools)
+            .map_err(|e| ProviderError::RequestFailed(e.to_string()))?;
+        
+        // Enable streaming
+        payload
+            .as_object_mut()
+            .unwrap()
+            .insert("stream".to_string(), serde_json::Value::Bool(true));
+
+        let mut log = RequestLog::start(&self.model, &payload)?;
+
+        let resp = self
+            .api_client
+            .response_post("api/anthropic/v1/messages", &payload)
+            .await
+            .inspect_err(|e| {
+                let _ = log.error(e);
+            })?;
+
+        let response = handle_status_openai_compat(resp).await.inspect_err(|e| {
+            let _ = log.error(e);
+        })?;
+
+        let stream = response.bytes_stream().map_err(io::Error::other);
+
+        Ok(Box::pin(try_stream! {
+            let stream_reader = StreamReader::new(stream);
+            let framed = tokio_util::codec::FramedRead::new(
+                stream_reader, 
+                tokio_util::codec::LinesCodec::new()
+            ).map_err(anyhow::Error::from);
+
+            let message_stream = response_to_streaming_message(framed);
+            pin!(message_stream);
+            while let Some(message) = futures::StreamExt::next(&mut message_stream).await {
+                let (message, usage) = message.map_err(|e| ProviderError::RequestFailed(format!("Stream decode error: {}", e)))?;
+                log.write(&message, usage.as_ref().map(|f| f.usage).as_ref())?;
+                yield (message, usage);
+            }
+        }))
+    }
+
     fn supports_streaming(&self) -> bool {
-        false // For now, disable streaming until we implement it properly
+        true
     }
 }
