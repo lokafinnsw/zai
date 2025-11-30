@@ -9,7 +9,6 @@ use goose_mcp::{
 
 use crate::commands::acp::run_acp_agent;
 use crate::commands::bench::agent_generator;
-use crate::commands::configure::handle_configure;
 use crate::commands::info::handle_info;
 use crate::commands::project::{handle_project_default, handle_projects_interactive};
 use crate::commands::recipe::{handle_deeplink, handle_list, handle_open, handle_validate};
@@ -35,7 +34,7 @@ use std::path::PathBuf;
 use tracing::warn;
 
 #[derive(Parser)]
-#[command(author, version, display_name = "", about, long_about = None)]
+#[command(author, version, display_name = "Z.ai Coding Agent", about = "AI-powered coding assistant using Z.ai's GLM-4.6 model", long_about = "Z.ai Coding Agent is an AI-powered assistant that helps you with coding tasks using Z.ai's GLM-4.6 model. It provides intelligent code suggestions, explanations, and assistance for a wide range of programming tasks.")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
@@ -409,10 +408,27 @@ enum RecipeCommand {
 }
 
 #[derive(Subcommand)]
+enum ConfigCommand {
+    /// Show current configuration
+    Show {},
+    /// Change the model
+    Model {
+        /// Model to use (glm-4.6, glm-4.5, glm-4.5-air)
+        #[arg(value_parser = ["glm-4.6", "glm-4.5", "glm-4.5-air"])]
+        model: String,
+    },
+    /// Change the API key
+    Key {},
+}
+
+#[derive(Subcommand)]
 enum Command {
-    /// Configure goose settings
-    #[command(about = "Configure goose settings")]
-    Configure {},
+    /// Configure z.ai settings
+    #[command(about = "Configure z.ai settings")]
+    Config {
+        #[command(subcommand)]
+        command: Option<ConfigCommand>,
+    },
 
     /// Display goose configuration information
     #[command(about = "Display goose information")]
@@ -861,7 +877,7 @@ pub async fn cli() -> anyhow::Result<()> {
     }
 
     let command_name = match &cli.command {
-        Some(Command::Configure {}) => "configure",
+        Some(Command::Config { .. }) => "config",
         Some(Command::Info { .. }) => "info",
         Some(Command::Mcp { .. }) => "mcp",
         Some(Command::Acp {}) => "acp",
@@ -884,7 +900,23 @@ pub async fn cli() -> anyhow::Result<()> {
     );
 
     match cli.command {
-        Some(Command::Configure {}) => handle_configure().await?,
+        Some(Command::Config { command }) => {
+            match command {
+                Some(ConfigCommand::Show {}) => {
+                    crate::commands::zai_configure::handle_config_show().await?;
+                }
+                Some(ConfigCommand::Model { model }) => {
+                    crate::commands::zai_configure::handle_config_model(model).await?;
+                }
+                Some(ConfigCommand::Key {}) => {
+                    crate::commands::zai_configure::handle_config_key().await?;
+                }
+                None => {
+                    // Default to zai onboarding
+                    crate::commands::zai_configure::handle_zai_configure().await?;
+                }
+            }
+        }
         Some(Command::Info { verbose }) => handle_info(verbose)?,
         Some(Command::Mcp { server }) => {
             let name = server.name();
@@ -1389,7 +1421,8 @@ pub async fn cli() -> anyhow::Result<()> {
         }
         None => {
             return if !Config::global().exists() {
-                handle_configure().await?;
+                // Use zai onboarding for first-time setup
+                crate::commands::zai_configure::handle_zai_configure().await?;
                 Ok(())
             } else {
                 // Run session command by default

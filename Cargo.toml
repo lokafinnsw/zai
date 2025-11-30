@@ -5,10 +5,10 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 version = "1.15.0"
-authors = ["Block <ai-oss-tools@block.xyz>"]
+authors = ["Z.ai <ai-oss-tools@z.ai>"]
 license = "Apache-2.0"
-repository = "https://github.com/block/goose"
-description = "An AI agent"
+repository = "https://github.com/z-ai/zai-coding-agent"
+description = "Z.ai Coding Agent - AI-powered coding assistant"
 
 [workspace.lints.clippy]
 uninlined_format_args = "allow"

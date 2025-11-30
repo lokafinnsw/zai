@@ -1,52 +1,71 @@
-<div align="center">
+# Z.ai Coding Agent
 
-# goose
+AI-powered coding assistant using Z.ai's GLM-4.6 model.
 
-_a local, extensible, open source AI agent that automates engineering tasks_
+## Features
 
-<p align="center">
-  <a href="https://opensource.org/licenses/Apache-2.0">
-    <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg">
-  </a>
-  <a href="https://discord.gg/goose-oss">
-    <img src="https://img.shields.io/discord/1287729918100246654?logo=discord&logoColor=white&label=Join+Us&color=blueviolet" alt="Discord">
-  </a>
-  <a href="https://github.com/block/goose/actions/workflows/ci.yml">
-     <img src="https://img.shields.io/github/actions/workflow/status/block/goose/ci.yml?branch=main" alt="CI">
-  </a>
-</p>
-</div>
+- 🚀 200K context window for large codebases
+- 💡 Code explanation and documentation
+- 🔧 Smart refactoring suggestions
+- 🐛 Automatic bug detection and fixes
+- ⚡ Fast responses with GLM-4.5-Air option
 
-goose is your on-machine AI agent, capable of automating complex development tasks from start to finish. More than just code suggestions, goose can build entire projects from scratch, write and execute code, debug failures, orchestrate workflows, and interact with external APIs - _autonomously_.
+## Quick Start
 
-Whether you're prototyping an idea, refining existing code, or managing intricate engineering pipelines, goose adapts to your workflow and executes tasks with precision.
+1. Get your API key at [z.ai/subscribe](https://z.ai/subscribe)
+2. Install the CLI
+3. Enter your API key when prompted
+4. Start coding with AI!
 
-Designed for maximum flexibility, goose works with any LLM and supports multi-model configuration to optimize performance and cost, seamlessly integrates with MCP servers, and is available as both a desktop app as well as CLI - making it the ultimate AI assistant for developers who want to move faster and focus on innovation.
+## Installation
 
-[![Watch the video](https://github.com/user-attachments/assets/ddc71240-3928-41b5-8210-626dfb28af7a)](https://youtu.be/D-DpDunrbpo)
+### From Source
 
-# Quick Links
-- [Quickstart](https://block.github.io/goose/docs/quickstart)
-- [Installation](https://block.github.io/goose/docs/getting-started/installation)
-- [Tutorials](https://block.github.io/goose/docs/category/tutorials)
-- [Documentation](https://block.github.io/goose/docs/category/getting-started)
-- [Responsible AI-Assisted Coding Guide](https://github.com/block/goose/blob/main/HOWTOAI.md)
-- [Governance](https://github.com/block/goose/blob/main/GOVERNANCE.md)
+```bash
+git clone https://github.com/z-ai/zai-coding-agent
+cd zai-coding-agent
+cargo build --release
+```
 
-## Need Help?
-- [Diagnostics & Reporting](https://block.github.io/goose/docs/troubleshooting/diagnostics-and-reporting)
-- [Known Issues](https://block.github.io/goose/docs/troubleshooting/known-issues)
+### From Binary
 
-# a little goose humor 🦢
+Download the latest release from [GitHub Releases](https://github.com/z-ai/zai-coding-agent/releases).
 
-> Why did the developer choose goose as their AI agent?
-> 
-> Because it always helps them "migrate" their code to production! 🚀
+## Usage
 
-# goose around with us  
-- [Discord](https://discord.gg/goose-oss)
-- [YouTube](https://www.youtube.com/@goose-oss)
-- [LinkedIn](https://www.linkedin.com/company/goose-oss)
-- [Twitter/X](https://x.com/goose_oss)
-- [Bluesky](https://bsky.app/profile/opensource.block.xyz)
-- [Nostr](https://njump.me/opensource@block.xyz)
+### Interactive Mode
+
+```bash
+zai
+```
+
+### Single Query
+
+```bash
+zai "How do I implement a binary search in JavaScript?"
+```
+
+### Configuration
+
+```bash
+zai config              # Show current configuration
+zai config --model      # Change model
+zai config --key        # Change API key
+```
+
+## Models
+
+| Model | Context | Best For |
+|-------|---------|----------|
+| GLM-4.6 | 200K | Complex coding tasks |
+| GLM-4.5 | 128K | General use |
+| GLM-4.5-Air | 128K | Quick responses |
+
+## Attribution
+
+This project is based on [Goose](https://github.com/block/goose) by Block, Inc.
+Licensed under Apache 2.0.
+
+## License
+
+Apache 2.0
