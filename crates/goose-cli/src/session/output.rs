@@ -767,7 +767,7 @@ pub fn display_session_info(
 }
 
 pub fn display_greeting() {
-    println!("\ngoose is running! Enter your instructions, or try asking what goose can do.\n");
+    println!("\nZ.ai is running! Enter your instructions, or try asking what Z.ai can do.\n");
 }
 
 /// Display context window usage with both current and session totals

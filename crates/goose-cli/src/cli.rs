@@ -430,8 +430,8 @@ enum Command {
         command: Option<ConfigCommand>,
     },
 
-    /// Display goose configuration information
-    #[command(about = "Display goose information")]
+    /// Display Z.ai configuration information
+    #[command(about = "Display Z.ai information")]
     Info {
         /// Show verbose information including current configuration
         #[arg(short, long, help = "Show verbose information including config.yaml")]
@@ -439,14 +439,14 @@ enum Command {
     },
 
     /// Manage system prompts and behaviors
-    #[command(about = "Run one of the mcp servers bundled with goose")]
+    #[command(about = "Run one of the mcp servers bundled with Z.ai")]
     Mcp {
         #[arg(value_parser = clap::value_parser!(McpCommand))]
         server: McpCommand,
     },
 
-    /// Run goose as an ACP (Agent Client Protocol) agent
-    #[command(about = "Run goose as an ACP agent server on stdio")]
+    /// Run Z.ai as an ACP (Agent Client Protocol) agent
+    #[command(about = "Run Z.ai as an ACP agent server on stdio")]
     Acp {},
 
     /// Start or resume interactive chat sessions
@@ -539,7 +539,7 @@ enum Command {
             long = "with-builtin",
             value_name = "NAME",
             help = "Add builtin extensions by name (e.g., 'developer' or multiple: 'developer,github')",
-            long_help = "Add one or more builtin extensions that are bundled with goose by specifying their names, comma-separated",
+            long_help = "Add one or more builtin extensions that are bundled with Z.ai by specifying their names, comma-separated",
             value_delimiter = ','
         )]
         builtins: Vec<String>,
@@ -572,8 +572,8 @@ enum Command {
             short = 't',
             long = "text",
             value_name = "TEXT",
-            help = "Input text to provide to goose directly",
-            long_help = "Input text containing commands for goose. Use this in lieu of the instructions argument.",
+            help = "Input text to provide to Z.ai directly",
+            long_help = "Input text containing commands for Z.ai. Use this in lieu of the instructions argument.",
             conflicts_with = "instructions",
             conflicts_with = "recipe"
         )]
@@ -717,7 +717,7 @@ enum Command {
             long = "with-builtin",
             value_name = "NAME",
             help = "Add builtin extensions by name (e.g., 'developer' or multiple: 'developer,github')",
-            long_help = "Add one or more builtin extensions that are bundled with goose by specifying their names, comma-separated",
+            long_help = "Add one or more builtin extensions that are bundled with Z.ai by specifying their names, comma-separated",
             value_delimiter = ','
         )]
         builtins: Vec<String>,
@@ -793,20 +793,20 @@ enum Command {
         command: SchedulerCommand,
     },
 
-    /// Update the goose CLI version
-    #[command(about = "Update the goose CLI version")]
+    /// Update the Z.ai CLI version
+    #[command(about = "Update the Z.ai CLI version")]
     Update {
         /// Update to canary version
         #[arg(
             short,
             long,
             help = "Update to canary version",
-            long_help = "Update to the latest canary version of the goose CLI, otherwise updates to the latest stable version."
+            long_help = "Update to the latest canary version of the Z.ai CLI, otherwise updates to the latest stable version."
         )]
         canary: bool,
 
-        /// Enforce to re-configure goose during update
-        #[arg(short, long, help = "Enforce to re-configure goose during update")]
+        /// Enforce to re-configure Z.ai during update
+        #[arg(short, long, help = "Enforce to re-configure Z.ai during update")]
         reconfigure: bool,
     },
 
@@ -1152,7 +1152,7 @@ pub async fn cli() -> anyhow::Result<()> {
                 (Some(file), _, _) => {
                     let contents = std::fs::read_to_string(&file).unwrap_or_else(|err| {
                         eprintln!(
-                            "Instruction file not found — did you mean to use goose run --text?\n{}",
+                            "Instruction file not found — did you mean to use zai run --text?\n{}",
                             err
                         );
                         std::process::exit(1);

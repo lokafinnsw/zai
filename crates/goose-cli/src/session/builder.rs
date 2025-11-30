@@ -273,7 +273,7 @@ pub async fn build_session(session_config: SessionBuilderConfig) -> CliSession {
                 .and_then(|s| s.goose_provider.clone())
         })
         .or_else(|| config.get_goose_provider().ok())
-        .expect("No provider configured. Run 'goose configure' first");
+        .expect("No provider configured. Run 'zai config' first");
 
     let model_name = session_config
         .model
@@ -285,7 +285,7 @@ pub async fn build_session(session_config: SessionBuilderConfig) -> CliSession {
                 .and_then(|s| s.goose_model.clone())
         })
         .or_else(|| config.get_goose_model().ok())
-        .expect("No model configured. Run 'goose configure' first");
+        .expect("No model configured. Run 'zai config' first");
 
     let model_config = if session_config.resume
         && saved_model_config
@@ -322,9 +322,8 @@ pub async fn build_session(session_config: SessionBuilderConfig) -> CliSession {
         Err(e) => {
             output::render_error(&format!(
                 "Error {}.\n\
-                Please check your system keychain and run 'goose configure' again.\n\
-                If your system is unable to use the keyring, please try setting secret key(s) via environment variables.\n\
-                For more info, see: https://block.github.io/goose/docs/troubleshooting/#keychainkeyring-errors",
+                Please check your configuration and run 'zai config' again.\n\
+                You can also set the ZAI_API_KEY environment variable directly.",
                 e
             ));
             process::exit(1);
