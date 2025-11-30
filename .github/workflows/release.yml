@@ -1,133 +1,151 @@
-# This workflow is main release, needs to be manually tagged & pushed.
-on:
-  push:
-    paths-ignore:
-      - "documentation/**"
-    tags:
-      - "v1.*"
-
 name: Release
 
-# Permissions needed for AWS OIDC authentication in called workflows
-permissions:
-  id-token: write   # Required for AWS OIDC authentication in called workflow
-  contents: write   # Required for creating releases and by actions/checkout
-  actions: read     # May be needed for some workflows
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  # ------------------------------------
-  # 1) Build CLI for multiple OS/Arch
-  # ------------------------------------
-  build-cli:
-    uses: ./.github/workflows/build-cli.yml
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            name: zai-macos-x86_64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            name: zai-macos-arm64
+          # Linux
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: zai-linux-x86_64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: zai-linux-arm64
+          # Windows
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            name: zai-windows-x86_64.exe
 
-  # ------------------------------------
-  # 2) Upload Install CLI Script
-  # ------------------------------------
-  install-script:
-    name: Upload Install Script
-    runs-on: ubuntu-latest
-    needs: [build-cli]
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # pin@v4
-      - uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # pin@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
         with:
-          name: download_cli.sh
-          path: download_cli.sh
+          targets: ${{ matrix.target }}
 
-  # ------------------------------------------------------------
-  # 3) Bundle Desktop App (macOS)
-  # ------------------------------------------------------------
-  bundle-desktop:
-    uses: ./.github/workflows/bundle-desktop.yml
-    permissions:
-      id-token: write
-      contents: read
-    with:
-      signing: true
-    secrets:
-      OSX_CODESIGN_ROLE: ${{ secrets.OSX_CODESIGN_ROLE }}
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
 
-  # ------------------------------------------------------------
-  # 4) Bundle Desktop App (macOS)
-  # ------------------------------------------------------------
-  bundle-desktop-intel:
-    uses: ./.github/workflows/bundle-desktop-intel.yml
-    permissions:
-      id-token: write
-      contents: read
-    with:
-      signing: true
-    secrets:
-      OSX_CODESIGN_ROLE: ${{ secrets.OSX_CODESIGN_ROLE }}
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }} -p zai-cli
 
-  # ------------------------------------------------------------
-  # 5) Bundle Desktop App (Linux)
-  # ------------------------------------------------------------
-  bundle-desktop-linux:
-    uses: ./.github/workflows/bundle-desktop-linux.yml
+      - name: Prepare artifact (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/zai dist/${{ matrix.name }}
+          chmod +x dist/${{ matrix.name }}
 
-#  # ------------------------------------------------------------
-#  # 6) Bundle Desktop App (Windows)
-#  # ------------------------------------------------------------
-  bundle-desktop-windows:
-    uses: ./.github/workflows/bundle-desktop-windows.yml
-    with:
-      signing: true
-    secrets:
-      WINDOWS_CODESIGN_CERTIFICATE: ${{ secrets.WINDOWS_CODESIGN_CERTIFICATE }}
-      WINDOW_SIGNING_ROLE: ${{ secrets.WINDOW_SIGNING_ROLE }}
-      WINDOW_SIGNING_ROLE_TAG: ${{ secrets.WINDOW_SIGNING_ROLE_TAG }}
+      - name: Prepare artifact (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir dist
+          copy target\${{ matrix.target }}\release\zai.exe dist\${{ matrix.name }}
 
-  # ------------------------------------
-  # 7) Create/Update GitHub Release
-  # ------------------------------------
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: dist/${{ matrix.name }}
+
   release:
-    name: Release
+    name: Create Release
+    needs: build
     runs-on: ubuntu-latest
-    needs: [build-cli, install-script, bundle-desktop, bundle-desktop-intel, bundle-desktop-linux, bundle-desktop-windows]
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download all artifacts
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # pin@v4
+        uses: actions/download-artifact@v4
         with:
-          merge-multiple: true
+          path: artifacts
 
-      # Create/update the versioned release
-      - name: Release versioned
-        uses: ncipollo/release-action@440c8c1cb0ed28b9f43e4d1d670870f059653174 # pin@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: |
-            goose-*.tar.bz2
-            goose-*.zip
-            Goose*.zip
-            *.deb
-            *.rpm
-            download_cli.sh
-          allowUpdates: true
-          omitBody: true
-          omitPrereleaseDuringUpdate: true
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          for dir in artifacts/*/; do
+            cp "$dir"* release/
+          done
+          ls -la release/
 
-      # Create/update the stable release
-      - name: Release stable
-        uses: ncipollo/release-action@440c8c1cb0ed28b9f43e4d1d670870f059653174 # pin@v1
+      - name: Create checksums
+        run: |
+          cd release
+          sha256sum * > checksums.txt
+          cat checksums.txt
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
         with:
-          tag: stable
-          name: Stable
-          token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: |
-            goose-*.tar.bz2
-            goose-*.zip
-            Goose*.zip
-            *.deb
-            *.rpm
-            download_cli.sh
-          allowUpdates: true
-          omitBody: true
-          omitPrereleaseDuringUpdate: true
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Z.ai Coding Agent ${{ steps.version.outputs.version }}
+          body: |
+            ## Z.ai Coding Agent ${{ steps.version.outputs.version }}
+            
+            AI-powered coding assistant using Z.ai's GLM-4.6 model.
+            
+            ### Installation
+            
+            1. Download the binary for your platform
+            2. Make it executable: `chmod +x zai-*` (Unix)
+            3. Move to PATH: `mv zai-* /usr/local/bin/zai`
+            4. Run `zai config` to set up your API key
+            
+            ### Checksums
+            
+            See `checksums.txt` for SHA256 checksums.
+            
+            ### Models
+            
+            | Model | Context | Best For |
+            |-------|---------|----------|
+            | glm-4.6 | 200K | Complex coding tasks |
+            | glm-4.5 | 128K | General use |
+            | glm-4.5-air | 128K | Quick responses |
+          files: |
+            release/*
+          draft: false
+          prerelease: false
